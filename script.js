@@ -64,6 +64,20 @@ let SLIDE_SPEED, JUMP_VELOCITY, GRAVITY;
 let SPAWN_INTERVAL = 1.7;
 let groundY;
 
+// 蛋糕最高速度（拟真1.3/街机1.8）
+function cakeMaxSpeed() {
+  return gameMode === MODE.REALISTIC ? 1.3 : 1.8;
+}
+// 蛋糕速度倍率（第5层起每层+0.05）
+function cakeSpeedMul() {
+  if (stack.length < 5) return 1.0;
+  return Math.min(cakeMaxSpeed(), 1.0 + (stack.length - 4) * 0.05);
+}
+// 蛋糕生成间隔（随速度倍率递减，最短0.1秒无缝衔接）
+function spawnInterval() {
+  return Math.max(0.1, SPAWN_INTERVAL / cakeSpeedMul());
+}
+
 const CAKE_COLORS = [
   { body: '#F4A460', icing: '#FCD5A8', border: '#C68E4E' },
   { body: '#DEB887', icing: '#F5DEB3', border: '#B8944B' },
@@ -74,6 +88,12 @@ const CAKE_COLORS = [
   { body: '#FFA07A', icing: '#FFC4B3', border: '#D48060' },
   { body: '#87CEEB', icing: '#B8E2F2', border: '#5CA0C0' },
 ];
+const HARD_CAKE_COLOR = { body: '#9E9E9E', icing: '#BDBDBD', border: '#757575' };
+
+// 硬蛋糕判定：每5个普通蛋糕后第6个为硬蛋糕
+function isHardCake() {
+  return gameMode === MODE.REALISTIC && stack.length % 6 === 5;
+}
 
 // ── 状态 ──────────────────────────────────
 let stack = [];
@@ -96,15 +116,31 @@ const MODE = { ARCADE: 'arcade', REALISTIC: 'realistic' };
 let gameState = STATE.MENU;
 let gameMode = MODE.ARCADE;
 let menuBtns = [];
+let highArcade = 0;
+let highRealistic = 0;
 
 // ── 音频 ──────────────────────────────────
-const MENU_MUSIC = '情绪回收站.mp3';
+const MENU_MUSIC = 'music/情绪回收站.mp3';
 const GAME_MUSIC_POOL = [
-  '吉星出租 - 暮色回响 .mp3',
-  '汪苏泷&BY2 - 有点甜.mp3',
-  '李尧音 - 深海回响 .mp3',
-  'HOYO-MiX - 墓志铭 Epitaph .mp3',
-  'HOYO-MiX - 再度和你 With You Once More.mp3',
+  'music/有点甜.mp3',
+  'music/墓志铭 Epitaph .mp3',
+  'music/再度和你 With You Once More.mp3',
+  'music/TruE.mp3',
+  'music/云原神之歌.mp3',
+  'music/日冕 Coronal Radiance - HOYO-MiX.mp3',
+  'music/风吹月影的独步 .mp3',
+  'music/TIRED OF PROBLEMS (Explicit) - NUEKI _ TOLCHONOV _ Glichery.mp3',
+  'music/何者.mp3',
+  'music/使一颗心免于哀伤.mp3',
+  'music/在银河中孤独摇摆.mp3',
+  'music/希望有羽毛和翅膀.mp3',
+  'music/牵丝戏.mp3',
+  'music/野火 Wildfire - HOYO-MiX _ Jonathan Steingard.mp3',
+  'music/Komorebi.mp3',
+  'music/ouroVoros.mp3',
+  'music/不眠之夜.mp3',
+  'music/天生鬼才 - 萧敬腾 _ HOYO-MiX.mp3',
+  'music/耀斑 - HOYO-MiX _ YMIR.mp3',
 ];
 const ALL_MUSIC = [MENU_MUSIC, ...GAME_MUSIC_POOL];
 let currentMusic = null;
@@ -176,9 +212,19 @@ function buildMenu() {
   menuBtns = [
     { label: '街机模式', mode: MODE.ARCADE, desc: '悬空保留·轻松堆叠' },
     { label: '拟真模式', mode: MODE.REALISTIC, desc: '切边掉落·精准对齐' },
-    { label: '最高记录', mode: null, desc: '最高堆叠0层' },
-    { label: '设置', mode: null, desc: '音效与操控' },
+    { label: '最高记录', mode: null, desc: `街机模式最高${highArcade}层，拟真模式最高${highRealistic}层` },
+    { label: '设置', mode: null, desc: '音量·音效·音乐' },
   ];
+}
+
+// 更新最高纪录并在菜单按钮中刷新显示
+function updateHighScore() {
+  if (gameMode === MODE.ARCADE && score > highArcade) {
+    highArcade = score;
+  } else if (gameMode === MODE.REALISTIC && score > highRealistic) {
+    highRealistic = score;
+  }
+  menuBtns[2].desc = `街机模式最高${highArcade}层，拟真模式最高${highRealistic}层`;
 }
 
 // 根据窗口尺寸计算画布和所有游戏物体的缩放大小
@@ -257,7 +303,7 @@ function stackCake(cakeX, cakeW) {
   const cLeft = cakeX - cakeW / 2;
   const cRight = cakeX + cakeW / 2;
 
-  if (gameMode === MODE.REALISTIC && prev) {
+  if (gameMode === MODE.REALISTIC && prev && !cake.hard) {
     const pLeft = prev.cx - prev.width / 2;
     const pRight = prev.cx + prev.width / 2;
     const ovLeft = Math.max(cLeft, pLeft);
@@ -703,12 +749,19 @@ function spawnCake() {
   lastSpawnSide = fromRight ? 'right' : 'left';
 
   const cy = stackTopY() - CAKE_H * 1.8;
-  const c = CAKE_COLORS[Math.floor(Math.random() * CAKE_COLORS.length)];
+  const isHard = isHardCake();
+  const c = isHard ? HARD_CAKE_COLOR : CAKE_COLORS[Math.floor(Math.random() * CAKE_COLORS.length)];
 
-  // 拟真模式：新蛋糕宽度 = 上一跳剩余（栈顶）宽度，最小不低于 CAKE_W 的 25%
+  // 硬蛋糕大小固定为初始大小，普通蛋糕继承上一跳宽度（最小25%）
   let cakeW = CAKE_W;
-  if (gameMode === MODE.REALISTIC && stack.length > 0) {
+  if (!isHard && gameMode === MODE.REALISTIC && stack.length > 0) {
     cakeW = Math.max(CAKE_W * 0.25, stack[stack.length - 1].width);
+  }
+
+  // 达到最大速度后，每次送蛋糕速度在 0.8~max 之间随机（保留2位小数）
+  let sm = cakeSpeedMul();
+  if (sm >= cakeMaxSpeed()) {
+    sm = Math.round((0.8 + Math.random() * (sm - 0.8)) * 100) / 100;
   }
 
   cake = {
@@ -718,6 +771,8 @@ function spawnCake() {
     color: c,
     state: 'sliding',
     w: cakeW,
+    speedMul: sm,
+    hard: isHard,
   };
   rod = { x: cake.x, side: fromRight ? 'right' : 'left', state: 'out' };
 }
@@ -782,13 +837,13 @@ function update(dt) {
     spawnTimer -= dt;
     if (spawnTimer <= 0) {
       spawnCake();
-      spawnTimer = SPAWN_INTERVAL;
+      spawnTimer = spawnInterval();
     }
   }
 
   // ── 滑行 ──
   if (cake && cake.state === 'sliding') {
-    cake.x += (cake.fromRight ? -1 : 1) * SLIDE_SPEED * dt;
+    cake.x += (cake.fromRight ? -1 : 1) * SLIDE_SPEED * cake.speedMul * dt;
 
     const cw = cake.w || CAKE_W;
     const cLeft = cake.x - cw / 2;
@@ -1140,7 +1195,7 @@ function drawSettings() {
   ctx.rect(0, listTop - 4, canvas.width, listBottom - listTop + 8);
   ctx.clip();
 
-  const labels = ['随机播放', ...ALL_MUSIC.map(f => f.replace(/\.mp3$/i, '').replace(/^\S+\s*-\s*/, '').trim())];
+  const labels = ['随机播放', ...ALL_MUSIC.map(f => f.replace(/^music\//, '').replace(/\.mp3$/i, '').replace(/^\S+\s*-\s*/, '').trim())];
 
   for (let i = -1; i < ALL_MUSIC.length; i++) {
     const idx = i + 1;
@@ -1155,7 +1210,14 @@ function drawSettings() {
     ctx.font = fs + 'px Arial';
     ctx.textAlign = 'start';
     ctx.textBaseline = 'middle';
-    ctx.fillText(labels[idx], ix + 14, iy + ibh / 2);
+    // 文字过长时截断 + …
+    let label = labels[idx];
+    const maxTextW = iw - 32 - (isSelected ? 24 : 0);
+    while (ctx.measureText(label).width > maxTextW && label.length > 1) {
+      label = label.slice(0, -1);
+    }
+    if (label !== labels[idx]) label = label.replace(/.{0,2}$/, '…');
+    ctx.fillText(label, ix + 14, iy + ibh / 2);
     if (isSelected) {
       ctx.fillStyle = '#FFD700';
       ctx.font = 'bold ' + fs + 'px Arial';
