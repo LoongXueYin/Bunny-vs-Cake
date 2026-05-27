@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(start \"\" \"c:\\\\Users\\\\tx\\\\Desktop\\\\smallgame\\\\index_test.html\")",
+      "Bash(node --check \"c:/Users/tx/Desktop/smallgame/script.js\")",
+      "WebSearch",
+      "Bash(node -e ' *)",
+      "Bash(cd /tmp)",
+      "Bash(npm install *)",
+      "Bash(node make_ppt.js)"
+    ]
+  }
+}
