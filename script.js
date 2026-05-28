@@ -61,7 +61,11 @@ document.getElementById('ad-video').addEventListener('click', () => {
   const url = AD_LINKS[_currentAdSrc];
   if (url) {
     _adRedirectCooldown = Date.now() + 10000;
-    window.open(url, '_blank');
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.click();
   }
 });
 
