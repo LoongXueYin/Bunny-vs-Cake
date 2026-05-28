@@ -29,12 +29,41 @@
   hintUI.id = 'hint-ui';
   hintUI.textContent = '点击兔子 或 按空格键 跳跃';
   container.appendChild(hintUI);
+
+  // 广告弹窗
+  const adOverlay = document.createElement('div');
+  adOverlay.id = 'ad-overlay';
+  adOverlay.style.display = 'none';
+  const adVideo = document.createElement('video');
+  adVideo.id = 'ad-video';
+  adVideo.playsInline = true;
+  adVideo.setAttribute('webkit-playsinline', '');
+  adOverlay.appendChild(adVideo);
+  const adClose = document.createElement('button');
+  adClose.id = 'ad-close';
+  adClose.textContent = '✕';
+  adOverlay.appendChild(adClose);
+  container.appendChild(adOverlay);
 })();
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const scoreEl = document.getElementById('score');
 const pauseBtn = document.getElementById('pauseBtn');
+
+document.getElementById('ad-close').addEventListener('click', (e) => {
+  e.stopPropagation();
+  hideAd();
+});
+
+document.getElementById('ad-video').addEventListener('click', () => {
+  if (Date.now() < _adRedirectCooldown) return;
+  const url = AD_LINKS[_currentAdSrc];
+  if (url) {
+    _adRedirectCooldown = Date.now() + 10000;
+    window.open(url, '_blank');
+  }
+});
 
 // roundRect polyfill
 if (!ctx.roundRect) {
@@ -127,27 +156,71 @@ const GAME_MUSIC_POOL = [
   'music/再度和你 With You Once More.mp3',
   'music/TruE.mp3',
   'music/云原神之歌.mp3',
-  'music/日冕 Coronal Radiance - HOYO-MiX.mp3',
+  'music/日冕 Coronal Radiance.mp3',
   'music/风吹月影的独步 .mp3',
-  'music/TIRED OF PROBLEMS (Explicit) - NUEKI _ TOLCHONOV _ Glichery.mp3',
+  'music/TIRED OF PROBLEMS (Explicit).mp3',
   'music/何者.mp3',
   'music/使一颗心免于哀伤.mp3',
   'music/在银河中孤独摇摆.mp3',
   'music/希望有羽毛和翅膀.mp3',
   'music/牵丝戏.mp3',
-  'music/野火 Wildfire - HOYO-MiX _ Jonathan Steingard.mp3',
+  'music/野火 Wildfire.mp3',
   'music/Komorebi.mp3',
   'music/ouroVoros.mp3',
   'music/不眠之夜.mp3',
-  'music/天生鬼才 - 萧敬腾 _ HOYO-MiX.mp3',
-  'music/耀斑 - HOYO-MiX _ YMIR.mp3',
+  'music/天生鬼才.mp3',
+  'music/耀斑.mp3',
 ];
 const ALL_MUSIC = [MENU_MUSIC, ...GAME_MUSIC_POOL];
+const SFX_JUMP = 'effort/跳跃声.mp3';
+const SFX_LAND = 'effort/落地声.mp3';
+const SFX_HIT  = 'effort/撞击声.mp3';
 let currentMusic = null;
 let musicEnabled = true;
 let musicVolume = 1.0;
 let sfxVolume = 1.0;
 let selectedGameMusic = -1; // -1 = 随机，0-5 = ALL_MUSIC 索引
+let _gameOverCount = 0;
+let _adShowing = false;
+let _currentAdSrc = '';
+let _adRedirectCooldown = 0;
+let _adQueue = [];
+
+// 伪随机取广告：洗牌队列，每轮每个广告各播一次
+function _nextAd() {
+  if (_adQueue.length === 0) {
+    _adQueue = [...AD_POOL];
+    for (let i = _adQueue.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [_adQueue[i], _adQueue[j]] = [_adQueue[j], _adQueue[i]];
+    }
+    // 避免与上一轮末尾重复
+    if (_adQueue[0] === _currentAdSrc && _adQueue.length > 1) {
+      const j = 1 + Math.floor(Math.random() * (_adQueue.length - 1));
+      [_adQueue[0], _adQueue[j]] = [_adQueue[j], _adQueue[0]];
+    }
+  }
+  return _adQueue.pop();
+}
+
+const AD_POOL = [
+  'AD/swust宣传1.mp4',
+  'AD/swust宣传2.mp4',
+  'AD/三星堆介绍.mp4',
+  'AD/云原神.mp4',
+  'AD/绵阳方特.mp4',
+  'AD/越王楼.mp4',
+  'AD/云星穹铁道.mp4',
+];
+const AD_LINKS = {
+  'AD/swust宣传1.mp4': 'https://www.swust.edu.cn/',
+  'AD/swust宣传2.mp4': 'https://www.swust.edu.cn/',
+  'AD/三星堆介绍.mp4': 'https://www.sxd.cn/',
+  'AD/云原神.mp4': 'https://ys.mihoyo.com/cloud/#/',
+  'AD/绵阳方特.mp4': 'https://mianyang.fangte.com/oriental/HomePage',
+  'AD/越王楼.mp4': 'https://baike.baidu.com/item/%E8%B6%8A%E7%8E%8B%E6%A5%BC/6833504',
+  'AD/云星穹铁道.mp4': 'https://sr.mihoyo.com/cloud/?utm_share=1#/',
+};
 let _ambientMusicTime = 0;
 let _ambientMusicSrc = MENU_MUSIC;
 let _didPreview = false;
@@ -186,6 +259,13 @@ function applyMusicVolume() {
   if (currentMusic) currentMusic.volume = musicVolume;
 }
 
+// 播放音效（受 sfxVolume 控制）
+function playSfx(src) {
+  const s = new Audio(encodeURI(src));
+  s.volume = sfxVolume;
+  s.play().catch(() => {});
+}
+
 // 停止当前音乐
 function stopMusic() {
   if (currentMusic) {
@@ -210,8 +290,8 @@ function playGameMusic() {
 // 构建主菜单按钮列表
 function buildMenu() {
   menuBtns = [
-    { label: '街机模式', mode: MODE.ARCADE, desc: '悬空保留·轻松堆叠' },
-    { label: '拟真模式', mode: MODE.REALISTIC, desc: '切边掉落·精准对齐' },
+    { label: '街机模式', mode: MODE.ARCADE, desc: '经典模式·轻松堆叠' },
+    { label: '拟真模式', mode: MODE.REALISTIC, desc: '切边掉落·难度暴增 ' },
     { label: '最高记录', mode: null, desc: `街机模式最高${highArcade}层，拟真模式最高${highRealistic}层` },
     { label: '设置', mode: null, desc: '音量·音效·音乐' },
   ];
@@ -263,6 +343,52 @@ function initClouds() {
   }
 }
 
+// 每2次游戏结束弹出广告
+function tryShowAd() {
+  _gameOverCount++;
+  if (_gameOverCount % 2 === 0) {
+    const ov = document.getElementById('ad-overlay');
+    const v = document.getElementById('ad-video');
+    const btn = document.getElementById('ad-close');
+    _currentAdSrc = _nextAd();
+    v.src = _currentAdSrc;
+    v.loop = true;
+    ov.style.display = 'flex';
+    _adShowing = true;
+    if (currentMusic) currentMusic.pause();
+    // X 随机放在视频四个角之一
+    const corner = Math.floor(Math.random() * 4);
+    btn.style.top = ''; btn.style.right = ''; btn.style.bottom = ''; btn.style.left = '';
+    v.addEventListener('loadedmetadata', function posClose() {
+      const ovr = ov.getBoundingClientRect();
+      const vr = v.getBoundingClientRect();
+      const margin = 8;
+      const rTop  = vr.top  - ovr.top;
+      const rLeft = vr.left - ovr.left;
+      const rBottom = ovr.bottom - vr.bottom;
+      const rRight  = ovr.right  - vr.right;
+      switch (corner) {
+        case 0: btn.style.top  = (rTop  - 12) + 'px'; btn.style.right  = (rRight  - 8) + 'px'; break;
+        case 1: btn.style.top  = (rTop  - 12) + 'px'; btn.style.left   = (rLeft   - 8) + 'px'; break;
+        case 2: btn.style.bottom = (rBottom - 12) + 'px'; btn.style.right  = (rRight  - 8) + 'px'; break;
+        case 3: btn.style.bottom = (rBottom - 12) + 'px'; btn.style.left   = (rLeft   - 8) + 'px'; break;
+      }
+    }, { once: true });
+    v.play().catch(() => {});
+  }
+}
+
+// 关闭广告
+function hideAd() {
+  const v = document.getElementById('ad-video');
+  v.pause();
+  v.removeAttribute('src');
+  v.load();
+  document.getElementById('ad-overlay').style.display = 'none';
+  _adShowing = false;
+  if (currentMusic) currentMusic.play().catch(() => {});
+}
+
 // 初始化 / 重置游戏状态（兔子、蛋糕堆、分数、计时器等）
 function init() {
   resize();
@@ -312,6 +438,9 @@ function stackCake(cakeX, cakeW) {
     if (ovW <= 1) {
       gameOver = true;
       updatePauseBtn();
+      updateHighScore();
+      playSfx(SFX_HIT);
+      tryShowAd();
       shakeX = 14; shakeY = 8; deathTimer = 0.8;
       rabbit.vy = -420;
       rabbit.vx = (cake.fromRight ? -1 : 1) * 220;
@@ -332,6 +461,9 @@ function stackCake(cakeX, cakeW) {
       if (Math.min(cRight,pRight) - Math.max(cLeft,pLeft) <= 0) {
         gameOver = true;
         updatePauseBtn();
+        updateHighScore();
+        playSfx(SFX_HIT);
+        tryShowAd();
         shakeX = 14; shakeY = 8; deathTimer = 0.8;
         rabbit.vy = -420;
         rabbit.vx = (cake.fromRight ? -1 : 1) * 220;
@@ -386,8 +518,7 @@ function updatePauseBtn() {
     return;
   }
   if (gameOver) {
-    pauseBtn.style.display = '';
-    pauseBtn.textContent = '✕';
+    pauseBtn.style.display = 'none';
     return;
   }
   pauseBtn.style.display = paused ? 'none' : '';
@@ -403,7 +534,7 @@ function showHint(visible) {
 pauseBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   if (gameState === STATE.SETTINGS) { goToMenu(); return; }
-  if (gameOver) { goToMenu(); return; }
+  if (gameOver) return;
   togglePause();
 });
 
@@ -462,6 +593,25 @@ function handlePauseMenuClick(cx, cy) {
       else if (action === 'quit') { goToMenu(); }
       return true;
     }
+  }
+  return false;
+}
+
+// 检测游戏结束按钮点击
+function handleGameOverClick(cx, cy) {
+  const bw = canvas.width * 0.50;
+  const bh = canvas.height * 0.06;
+  const gap = canvas.height * 0.04;
+  const bx = canvas.width / 2 - bw / 2;
+  const by1 = canvas.height * 0.48;
+  const by2 = by1 + bh + gap;
+  if (cx >= bx && cx <= bx + bw && cy >= by1 && cy <= by1 + bh) {
+    init();
+    return true;
+  }
+  if (cx >= bx && cx <= bx + bw && cy >= by2 && cy <= by2 + bh) {
+    goToMenu();
+    return true;
   }
   return false;
 }
@@ -644,6 +794,7 @@ function jump() {
     rabbit.vy = -JUMP_VELOCITY;
     rabbit.onGround = false;
     showHint(false);
+    playSfx(SFX_JUMP);
   }
 }
 
@@ -663,6 +814,14 @@ canvas.addEventListener('click', (e) => {
     handleMenuClick(sx, sy);
     return;
   }
+  // 游戏结束按钮（广告弹窗时屏蔽）
+  if (gameOver && !_adShowing) {
+    const rect = canvas.getBoundingClientRect();
+    const sx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const sy = (e.clientY - rect.top) * (canvas.height / rect.height);
+    handleGameOverClick(sx, sy);
+    return;
+  }
   // 暂停菜单按钮
   if (paused && !gameOver) {
     const rect = canvas.getBoundingClientRect();
@@ -679,8 +838,8 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     if (gameState === STATE.MENU || gameState === STATE.SETTINGS) return;
     if (e.code === 'Space' && (paused || gameOver)) {
-      if (gameOver) init();
-      else togglePause();
+      if (gameOver && !_adShowing) init();
+      else if (paused) togglePause();
       return;
     }
     jump();
@@ -727,6 +886,14 @@ canvas.addEventListener('touchstart', (e) => {
     const sx = (e.touches[0].clientX - rect.left) * (canvas.width / rect.width);
     const sy = (e.touches[0].clientY - rect.top) * (canvas.height / rect.height);
     handleMenuClick(sx, sy);
+    return;
+  }
+  // 游戏结束按钮（广告弹窗时屏蔽）
+  if (gameOver && !_adShowing) {
+    const rect = canvas.getBoundingClientRect();
+    const sx = (e.touches[0].clientX - rect.left) * (canvas.width / rect.width);
+    const sy = (e.touches[0].clientY - rect.top) * (canvas.height / rect.height);
+    handleGameOverClick(sx, sy);
     return;
   }
   // 暂停菜单按钮
@@ -827,6 +994,7 @@ function update(dt) {
       rabbit.y = st - RABBIT_H;
       rabbit.vy = 0;
       rabbit.onGround = true;
+      playSfx(SFX_LAND);
     }
   } else {
     rabbit.y = st - RABBIT_H;
@@ -866,6 +1034,9 @@ function update(dt) {
       else if (rabbit.onGround || rabbitBottom > colTop + CAKE_H * 0.4) {
         gameOver = true;
         updatePauseBtn();
+        updateHighScore();
+        playSfx(SFX_HIT);
+        tryShowAd();
         shakeX = 14; shakeY = 8;
         deathTimer = 0.8;
         rabbit.vy = -420;
@@ -1421,13 +1592,35 @@ function draw() {
     ctx.font = 'bold ' + fs + 'px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('游戏结束', canvas.width / 2, canvas.height / 2 - canvas.height * 0.05);
-    ctx.font = Math.round(canvas.width * 0.05) + 'px Arial';
-    ctx.fillStyle = '#DDD';
-    ctx.fillText('点击或按空格键重新开始', canvas.width / 2, canvas.height / 2 + canvas.height * 0.06);
+    ctx.fillText('游戏结束', canvas.width / 2, canvas.height * 0.32);
     ctx.font = Math.round(canvas.width * 0.045) + 'px Arial';
     ctx.fillStyle = '#FFD700';
-    ctx.fillText('堆了 ' + score + ' 层蛋糕', canvas.width / 2, canvas.height / 2 + canvas.height * 0.12);
+    ctx.fillText('堆了 ' + score + ' 层蛋糕', canvas.width / 2, canvas.height * 0.40);
+
+    // 两个按钮（上下排版）
+    const bw = canvas.width * 0.50;
+    const bh = canvas.height * 0.06;
+    const gap = canvas.height * 0.04;
+    const bx = canvas.width / 2 - bw / 2;
+    const by1 = canvas.height * 0.48;
+    const by2 = by1 + bh + gap;
+    ctx.font = 'bold ' + Math.round(canvas.width * 0.04) + 'px Arial';
+    ctx.textBaseline = 'middle';
+
+    // 重新开始
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(bx, by1, bw, bh, 10); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#FFF';
+    ctx.fillText('重新开始', canvas.width / 2, by1 + bh / 2);
+
+    // 返回主页
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath(); ctx.roundRect(bx, by2, bw, bh, 10); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#FFF';
+    ctx.fillText('返回主页', canvas.width / 2, by2 + bh / 2);
   }
 }
 
