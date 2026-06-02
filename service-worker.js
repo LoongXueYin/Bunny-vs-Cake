@@ -25,21 +25,22 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 
-// 请求：缓存优先（核心文件），网络优先（音乐/视频/音效），其他回退缓存
+// 请求：核心文件缓存优先，媒体文件缓存优先（首次下载后离线秒开）
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (url.origin !== location.origin) return;
 
-  // 音乐/视频/音效：网络优先，失败时用缓存
-  if (/\.(mp3|mp4|flac)$/i.test(url.pathname)) {
+  // 音乐/视频/音效：缓存优先，未命中时网络获取并缓存
+  if (/\.(mp3|mp4|flac|png|jpg|gif)$/i.test(url.pathname)) {
     e.respondWith(
-      fetch(e.request)
-        .then((res) => {
+      caches.match(e.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(e.request).then((res) => {
           const clone = res.clone();
           caches.open(CACHE).then((cache) => cache.put(e.request, clone));
           return res;
-        })
-        .catch(() => caches.match(e.request))
+        });
+      })
     );
     return;
   }

@@ -594,6 +594,11 @@ function runSplashSequence() {
   const healthGrp = document.getElementById('splash-health-group');
   const splashEl = document.getElementById('scene-splash');
   const startEl = document.getElementById('scene-start');
+  // 后台预加载菜单音乐和常用音效，利用开屏时间缓冲
+  [MENU_MUSIC, SFX_JUMP, SFX_LAND, SFX_HIT].forEach(src => {
+    const a = new Audio(encodeURI(src));
+    a.preload = 'auto'; a.load();
+  });
   // 2s 后标题文字淡出
   setTimeout(() => {
     titleGrp.style.opacity = '0';
