@@ -190,9 +190,7 @@ let _splashDone = false;
 
 // ── 皮肤系统 ──────────────────────────────
 const SKIN_LIST = ['character/皮肤1.png', 'character/皮肤2.png', 'character/皮肤3.png', 'character/皮肤4.png', 'character/角色5.png', 'character/角色6.png'];
-let currentSkin = -1;          // -1 = 默认（无皮肤），-2 = 随机
-let _randomSkinIdx = 0;        // 随机皮肤每次游戏锁定一个
-let _skinQueue = [];           // 伪随机皮肤队列
+let currentSkin = -1;          // -1 = 默认（无皮肤）
 const skinImages = [];         // 预加载图片对象
 
 // 预加载皮肤图片
@@ -444,21 +442,6 @@ function hideAd() {
 
 // 初始化/重置游戏状态（兔子、蛋糕堆、分数等）
 function init() {
-  // 随机皮肤：每次新游戏锁定一个
-  // 随机皮肤：伪随机轮换（每轮各播一次）
-  if (currentSkin === -2) {
-    if (_skinQueue.length === 0) {
-      _skinQueue = [...Array(SKIN_LIST.length).keys()];
-      for (let i = _skinQueue.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [_skinQueue[i], _skinQueue[j]] = [_skinQueue[j], _skinQueue[i]];
-      }
-      if (_skinQueue[0] === _randomSkinIdx && _skinQueue.length > 1) {
-        [_skinQueue[0], _skinQueue[1]] = [_skinQueue[1], _skinQueue[0]];
-      }
-    }
-    _randomSkinIdx = _skinQueue.pop();
-  }
   resize();
   rabbit = {
     x: canvas.width / 2,
@@ -772,7 +755,7 @@ function handleSkinClick(cx, cy) {
   const cellW = (canvas.width - margin * 2 - gap * (cols - 1)) / cols;
   const cellH = cellW * 1.2;
   const startY = canvas.height * 0.20 - _skinScroll;
-  const items = [-2, -1, ...SKIN_LIST.map((_, i) => i)];
+  const items = [-1, ...SKIN_LIST.map((_, i) => i)];
 
   for (let i = 0; i < items.length; i++) {
     const col = i % cols;
@@ -867,7 +850,7 @@ canvas.addEventListener('touchmove', (e) => {
     const cols = 2; const gap = canvas.width * 0.05;
     const cellW = (canvas.width - canvas.width * 0.10 * 2 - gap * (cols - 1)) / cols;
     const cellH = cellW * 1.2;
-    const items = [-2, -1, ...SKIN_LIST.map((_, i) => i)];
+    const items = [-1, ...SKIN_LIST.map((_, i) => i)];
     const listTop = canvas.height * 0.20;
     const listBottom = canvas.height * 0.94;
     const totalRows = Math.ceil(items.length / cols);
@@ -898,7 +881,7 @@ canvas.addEventListener('wheel', (e) => {
     const cols = 2; const gap = canvas.width * 0.05;
     const cellW = (canvas.width - canvas.width * 0.10 * 2 - gap * (cols - 1)) / cols;
     const cellH = cellW * 1.2;
-    const items = [-2, -1, ...SKIN_LIST.map((_, i) => i)];
+    const items = [-1, ...SKIN_LIST.map((_, i) => i)];
     const listTop = canvas.height * 0.20;
     const listBottom = canvas.height * 0.94;
     const totalRows = Math.ceil(items.length / cols);
@@ -1214,16 +1197,12 @@ function drawRabbit(x, sy, dying) {
   // 皮肤渲染（使用图片替代几何兔子）
   if (currentSkin >= 0 && skinImages[currentSkin] && skinImages[currentSkin].complete) {
     const skin = skinImages[currentSkin];
-    const w = skin.naturalWidth; const h = skin.naturalHeight;
+    // 不缩放，直接以原图尺寸居中绘制，判定框不变
+    const w = skin.naturalWidth;
+    const h = skin.naturalHeight;
     ctx.drawImage(skin, x - w / 2, sy - h, w, h);
-    ctx.restore(); return;
-  }
-  // 随机皮肤（每局锁定一张）
-  if (currentSkin === -2 && skinImages[_randomSkinIdx] && skinImages[_randomSkinIdx].complete) {
-    const skin = skinImages[_randomSkinIdx];
-    const w = skin.naturalWidth; const h = skin.naturalHeight;
-    ctx.drawImage(skin, x - w / 2, sy - h, w, h);
-    ctx.restore(); return;
+    ctx.restore();
+    return;
   }
 
   // 阴影（极轻）
@@ -1788,7 +1767,7 @@ function drawSkinSelection() {
   const gap = canvas.width * 0.05;
   const cellW = (canvas.width - margin * 2 - gap * (cols - 1)) / cols;
   const cellH = cellW * 1.2;
-  const items = [-2, -1, ...SKIN_LIST.map((_, i) => i)];
+  const items = [-1, ...SKIN_LIST.map((_, i) => i)];
   const totalRows = Math.ceil(items.length / cols);
   const listTop = canvas.height * 0.20;
   const listBottom = canvas.height * 0.94;
@@ -1839,11 +1818,6 @@ function drawSkinSelection() {
       }
       ctx.drawImage(s, imgX + (imgAreaW - drawW) / 2, imgY + (imgAreaH - drawH) / 2, drawW, drawH);
       ctx.restore();
-    } else if (items[i] === -2) {
-      ctx.font = 'bold ' + Math.round(cellW * 0.35) + 'px Arial';
-      ctx.fillStyle = '#ADB5BD';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('?', cx + cellW / 2, cy + imgAreaH * 0.52);
     } else {
       ctx.font = fs + 'px Arial';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -1854,7 +1828,7 @@ function drawSkinSelection() {
     ctx.fillStyle = C.TEXT_DARK;
     ctx.font = fs + 'px "PingFang SC","Microsoft YaHei",sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const label = items[i] === -2 ? '随机皮肤' : items[i] === -1 ? '默认皮肤' : ('皮肤 ' + (items[i] + 1));
+    const label = items[i] < 0 ? '默认皮肤' : ('皮肤 ' + (items[i] + 1));
     ctx.fillText(label, cx + cellW / 2, cy + cellH * 0.70);
 
     // 选中标记

@@ -1,0 +1,15 @@
+{
+  "name": "兔子躲蛋糕",
+  "short_name": "兔子躲蛋糕",
+  "description": "点击跳跃·躲避蛋糕·堆叠成山",
+  "start_url": "/Jumping-cakes/",
+  "scope": "/Jumping-cakes/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#1a1a2e",
+  "background_color": "#1a1a2e",
+  "icons": [
+    { "src": "/Jumping-cakes/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/Jumping-cakes/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
