@@ -224,9 +224,10 @@ const GAME_MUSIC_POOL = [
   'music/风吹月影的独步 .mp3', 'music/TIRED OF PROBLEMS (Explicit).mp3',
   'music/使一颗心免于哀伤.mp3',
   'music/在银河中孤独摇摆.mp3', 'music/希望有羽毛和翅膀.mp3',
-  'music/牵丝戏.mp3', 'music/野火 Wildfire.mp3',
-  'music/Komorebi.mp3', 'music/ouroVoros.mp3',
+  'music/野火 Wildfire.mp3',
+  'music/Komorebi.mp3',
   'music/不眠之夜.mp3', 'music/天生鬼才.mp3', 'music/耀斑.mp3',
+  'music/九张机.mp3', 'music/星辰大海.mp3', 'music/猜不透.mp3',
 ];
 const ALL_MUSIC = [MENU_MUSIC, ...GAME_MUSIC_POOL];
 const SFX_JUMP = 'effort/跳跃声.mp3';
