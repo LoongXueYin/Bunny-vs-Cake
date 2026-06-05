@@ -589,47 +589,18 @@ function switchScene(sceneId) {
 }
 
 // ── 启动画面流程 ──────────────────────────────
-// 显示进度条 → 预加载媒体 → 标题→淡出→健康忠告→主菜单
+// 单白底页面：标题文字→淡出→健康忠告文字淡入→整体切主菜单
 function runSplashSequence() {
   const titleGrp = document.getElementById('splash-title-group');
   const healthGrp = document.getElementById('splash-health-group');
   const splashEl = document.getElementById('scene-splash');
   const startEl = document.getElementById('scene-start');
-  const bar = document.getElementById('splash-progress-fill');
-
-  // 收集需预加载的媒体：广告视频 + 音效 + 菜单音乐
-  const toLoad = [...AD_POOL, SFX_JUMP, SFX_LAND, SFX_HIT, MENU_MUSIC];
-  let loaded = 0;
-  const total = toLoad.length;
-
-  function updateBar() {
-    loaded++;
-    bar.style.width = Math.round((loaded / total) * 100) + '%';
-    if (loaded >= total) {
-      // 全部加载完成，开始正常的 splash 序列
-      setTimeout(() => startTextSequence(), 300);
-    }
-  }
-
-  toLoad.forEach(src => {
-    if (/\.mp4$/i.test(src)) {
-      // 视频：用 fetch 触发缓存下载
-      fetch(encodeURI(src), { mode: 'cors' })
-        .then(() => updateBar())
-        .catch(() => updateBar()); // 失败也算完成，不卡进度
-    } else {
-      // 音频：用 Audio 预加载
-      const a = new Audio();
-      a.preload = 'auto';
-      a.addEventListener('canplaythrough', () => updateBar(), { once: true });
-      a.addEventListener('error', () => updateBar(), { once: true });
-      a.src = encodeURI(src);
-      a.load();
-    }
+  // 后台预加载菜单音乐和常用音效，利用开屏时间缓冲
+  [MENU_MUSIC, SFX_JUMP, SFX_LAND, SFX_HIT].forEach(src => {
+    const a = new Audio(encodeURI(src));
+    a.preload = 'auto'; a.load();
   });
-
-  function startTextSequence() {
-    // 2s 后标题文字淡出
+  // 2s 后标题文字淡出
   setTimeout(() => {
     titleGrp.style.opacity = '0';
     // 0.8s 后健康忠告淡入
@@ -653,7 +624,6 @@ function runSplashSequence() {
       }, 2500);
     }, 800);
   }, 2000);
-  }
 }
 
 // ── 开始菜单按钮事件（HTML）───────────────────
